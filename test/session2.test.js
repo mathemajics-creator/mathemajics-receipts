@@ -258,6 +258,7 @@ describe('counter hardening', () => {
       '003_sessions.sql',
       '004_invoices.sql',
       '005_receipt_invoice_link.sql',
+      '006_harden_receipt_counter.sql',
     ]);
     const applied = await runMigrations(db.pool);
     expect(applied).toEqual([]);

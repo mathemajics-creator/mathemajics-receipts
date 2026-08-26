@@ -41,6 +41,41 @@ Put your Gmail address in `GMAIL_USER` and the 16-character app password in
 `GMAIL_APP_PASSWORD`. If these are left empty the tool still records receipts —
 emails just fail politely and can be retried later.
 
+## Branding on the PDFs
+
+Invoices and receipts are issued as branded PDFs: a navy header band carrying
+the Mathemajics logo, the document type, and the website and email address.
+
+The logo is read once at startup from `assets/logo.png`. If that file is ever
+missing or unreadable the documents still generate — the header falls back to a
+text wordmark and a warning is logged. A cosmetic asset must never stop a
+receipt being issued.
+
+Every colour and identity string lives in `branding.js`. The website and email
+can be overridden per deployment with `BRAND_WEBSITE` and `BRAND_EMAIL`, and the
+logo location with `BRAND_LOGO_PATH` (see `.env.example`).
+
+Every invoice closes with the standing service terms — what a fee includes, and
+which discounts are available. That wording lives in `INVOICE_TERMS` in
+`branding.js`; editing it changes future invoices only, never one already
+issued. Receipts do not carry the terms.
+
+Already-issued documents are never touched. The PDF stored against a receipt or
+invoice is the exact file that was emailed, and it is frozen — a design change
+applies only to documents issued afterwards, so older ones keep their original
+look. To see the current design without issuing anything:
+
+```bash
+node scripts/sample-pdfs.js
+```
+
+That writes `sample-invoice.pdf`, `sample-receipt-against-invoice.pdf` and
+`sample-invoice-large.pdf` from fixed sample data — no database involved, no
+number allocated. The large one exists to show the money formatting at scale:
+figures are printed with grouped thousands (`1,234,567.89`). That formatting
+lives in `format.js` and is shared by the PDFs and the emails, so a body can
+never disagree with the document attached to it.
+
 ## Running migrations
 
 Migrations set up (and later evolve) the database tables. They run

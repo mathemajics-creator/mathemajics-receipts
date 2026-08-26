@@ -97,6 +97,10 @@ function pdfText(buf) {
   const re = /stream\r?\n/g;
   let m;
   while ((m = re.exec(s))) {
+    // Skip image XObjects: they inflate to raw pixel data, and scanning that
+    // for words like 'ABN' is a false positive waiting to happen.
+    const objStart = s.lastIndexOf(' obj', m.index);
+    if (objStart >= 0 && s.slice(objStart, m.index).includes('/Image')) continue;
     const start = m.index + m[0].length;
     const end = s.indexOf('endstream', start);
     if (end < 0) continue;
@@ -788,10 +792,11 @@ describe('PDF & email', () => {
     const text = pdfText(stored);
     expect(text).toContain(inv.invoice_number);
     expect(text).toContain('INVOICE');
-    expect(text).toContain('MATHEMAJICS');
+    expect(stored.toString('latin1')).toContain('/Subtype /Image'); // the logo lockup
+    expect(text).toContain('Mathemajics');
     expect(text).toContain('TOTAL DUE');
-    expect(text).toContain('Due Date');
-    expect(text).toContain('AMOUNT PAYABLE IN INR: INR 13260.00');
+    expect(text).toContain('DUE DATE');
+    expect(text).toContain('AMOUNT PAYABLE IN INR: INR 13,260.00');
     expect(text).toContain('1 AUD = INR 55.25 (ECB reference rate, 25 Aug 2026)');
     expect(text).toContain('Payable by bank transfer.');
     expect(text).toContain('August tuition');
@@ -811,7 +816,7 @@ describe('PDF & email', () => {
       headers: { Authorization: `Bearer ${token}` },
     });
     const text = pdfText(Buffer.from(await pdfRes.arrayBuffer()));
-    expect(text).toContain('INR EQUIVALENT: INR 13260.00');
+    expect(text).toContain('INR EQUIVALENT: INR 13,260.00');
     expect(text).toContain('Indicative only; payable amount is AUD.');
   });
 
@@ -855,7 +860,7 @@ describe('PDF & email', () => {
       headers: { Authorization: `Bearer ${token}` },
     });
     const text = pdfText(Buffer.from(await pdfRes.arrayBuffer()));
-    expect(text).toContain('Against Invoice');
+    expect(text).toContain('AGAINST INVOICE');
     expect(text).toContain(inv.data.invoice.invoice_number);
     expect(text).toContain('FEE RECEIPT');
   });
@@ -868,7 +873,7 @@ describe('PDF & email', () => {
       headers: { Authorization: `Bearer ${token}` },
     });
     const text = pdfText(Buffer.from(await pdfRes.arrayBuffer()));
-    expect(text).not.toContain('Against Invoice');
+    expect(text).not.toContain('AGAINST INVOICE');
   });
 
   it('email failure leaves the invoice standing; retry reuses the stored bytes and 409s on a second send', async () => {

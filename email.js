@@ -3,6 +3,10 @@
 
 const nodemailer = require('nodemailer');
 
+// The same formatter the PDF uses. An email body that disagreed with the
+// document attached to it would read as an error to the parent.
+const { money } = require('./format');
+
 let transport = null;
 
 // Tests inject a fake here ({ sendMail: async (msg) => ... }). Pass null to
@@ -38,7 +42,7 @@ async function sendReceiptEmail(receipt, pdfBuffer) {
     text:
       `Dear ${receipt.parent_name},\n\n` +
       `Thank you for your payment. Receipt ${receipt.invoice_number} for ` +
-      `${receipt.student_name} — ${receipt.currency} ${Number(receipt.amount).toFixed(2)} ` +
+      `${receipt.student_name} — ${receipt.currency} ${money(receipt.amount)} ` +
       `(${receipt.fee_description}) — is attached as a PDF.\n\n` +
       `Warm regards,\nMathemajics`,
     attachments: [
@@ -67,7 +71,7 @@ async function sendInvoiceEmail(invoice, pdfBuffer) {
     text:
       `Dear ${invoice.parent_name},\n\n` +
       `Invoice ${invoice.invoice_number} for ${invoice.student_name} — ` +
-      `${invoice.currency} ${Number(invoice.total).toFixed(2)} — is due on ` +
+      `${invoice.currency} ${money(invoice.total)} — is due on ` +
       `${formatDueDate(invoice.due_date)}. The invoice is attached as a PDF.\n\n` +
       `Warm regards,\nMathemajics`,
     attachments: [
