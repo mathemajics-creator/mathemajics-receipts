@@ -7,6 +7,7 @@ const db = require('../db');
 const { validateReceiptInput } = require('../validate');
 const { generateReceiptPdf } = require('../pdf');
 const { sendReceiptEmail } = require('../email');
+const { csvCell, isoDate } = require('../csv');
 
 const router = express.Router();
 
@@ -14,13 +15,19 @@ const router = express.Router();
 const PUBLIC_COLUMNS =
   'id, invoice_number, issue_date, student_name, parent_name, parent_email, ' +
   'teacher_name, amount, currency, payment_method, payment_reference, ' +
-  'fee_description, gst_treatment, status, void_reason, voided_at, ' +
+  'fee_description, gst_treatment, invoice_id, status, void_reason, voided_at, ' +
   'email_sent_at, created_at';
 
-function isoDate(d) {
-  if (d === null || d === undefined) return null;
-  const dt = d instanceof Date ? d : new Date(d);
-  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+// The PDF prints the invoice this payment settles, so the number (not just the
+// id) has to travel with the row into the template.
+async function withInvoiceNumber(receipt) {
+  if (!receipt.invoice_id) return receipt;
+  const { rows } = await db.pool.query('SELECT invoice_number FROM invoices WHERE id = $1', [
+    receipt.invoice_id,
+  ]);
+  return rows.length === 0
+    ? receipt
+    : { ...receipt, against_invoice_number: rows[0].invoice_number };
 }
 
 async function fetchPublicRow(id) {
@@ -35,6 +42,32 @@ function parseId(raw) {
   return /^\d+$/.test(raw) ? parseInt(raw, 10) : null;
 }
 
+function httpError(status, code) {
+  const err = new Error(code);
+  err.httpStatus = status;
+  err.code = code;
+  return err;
+}
+
+// Runs inside the insert transaction. Locking the invoice row here is what
+// makes "one live receipt per invoice" hold under concurrency; throwing rolls
+// the whole transaction back, so no receipt number is consumed.
+async function checkInvoice(client, data) {
+  const { rows } = await client.query(
+    'SELECT id, status, currency FROM invoices WHERE id = $1 FOR UPDATE',
+    [data.invoice_id]
+  );
+  if (rows.length === 0) throw httpError(404, 'invoice_not_found');
+  const invoice = rows[0];
+  if (invoice.status === 'voided') throw httpError(409, 'invoice_voided');
+  if (invoice.currency !== data.currency) throw httpError(400, 'currency_mismatch');
+  const live = await client.query(
+    "SELECT 1 FROM receipts WHERE invoice_id = $1 AND status <> 'voided' LIMIT 1",
+    [data.invoice_id]
+  );
+  if (live.rows.length > 0) throw httpError(409, 'invoice_already_paid');
+}
+
 // ── CREATE ──────────────────────────────────────────────────────────────────
 router.post('/', async (req, res, next) => {
   try {
@@ -43,22 +76,34 @@ router.post('/', async (req, res, next) => {
       return res.status(400).json({ error: 'validation_failed', fields: errors });
     }
 
-    // 1. Allocate number + insert (its own committed transaction).
+    // 1. Allocate number + insert (its own committed transaction). When the
+    // payment settles an invoice, the invoice checks run inside that same
+    // transaction with the invoice row locked, so a racing second receipt
+    // cannot slip between the "already paid?" check and the insert — and a
+    // failed check burns no receipt number.
     const client = await db.pool.connect();
     let receipt;
     try {
-      receipt = await db.allocateReceiptNumberAndInsert(client, data);
+      receipt = await db.allocateReceiptNumberAndInsert(client, data, {
+        beforeInsert: data.invoice_id === null ? undefined : (c) => checkInvoice(c, data),
+      });
+    } catch (err) {
+      if (err && err.httpStatus) {
+        return res.status(err.httpStatus).json({ error: err.code });
+      }
+      throw err;
     } finally {
       client.release();
     }
 
     // 2. PDF, then 3. email — failures leave the receipt standing (by design).
+    const forPdf = await withInvoiceNumber(receipt);
     let pdfOk = false;
     let pdfBuffer = null;
     let emailed = false;
     let emailFailed = false;
     try {
-      pdfBuffer = await generateReceiptPdf(receipt);
+      pdfBuffer = await generateReceiptPdf(forPdf);
       await db.pool.query('UPDATE receipts SET pdf_bytes = $1 WHERE id = $2', [
         pdfBuffer,
         receipt.id,
@@ -93,15 +138,6 @@ router.post('/', async (req, res, next) => {
 });
 
 // ── CSV EXPORT (before /:id so "export.csv" is never read as an id) ─────────
-function csvCell(value) {
-  if (value === null || value === undefined) return '';
-  let s = String(value);
-  // Formula-injection defense first, then RFC-4180 quoting.
-  if (/^[=+\-@]/.test(s)) s = "'" + s;
-  if (/[",\r\n]/.test(s)) s = '"' + s.replace(/"/g, '""') + '"';
-  return s;
-}
-
 router.get('/export.csv', async (req, res, next) => {
   try {
     const { rows } = await db.pool.query(
@@ -260,7 +296,7 @@ router.post('/:id/send-email', async (req, res, next) => {
     // Reuse stored bytes; only generate when the original PDF step failed.
     let pdfBuffer = receipt.pdf_bytes;
     if (!pdfBuffer) {
-      pdfBuffer = await generateReceiptPdf(receipt);
+      pdfBuffer = await generateReceiptPdf(await withInvoiceNumber(receipt));
       await db.pool.query('UPDATE receipts SET pdf_bytes = $1 WHERE id = $2', [pdfBuffer, id]);
     }
 

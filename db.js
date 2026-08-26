@@ -19,43 +19,90 @@ function formatInvoiceNumber(n) {
   return 'RCPT-' + String(n).padStart(6, '0');
 }
 
-// Race-safe sequential allocation + insert, all in one transaction on the
-// caller's client. The row lock on receipt_counter serializes concurrent
-// allocations; a failed insert rolls the counter back too, so a number is
-// never consumed without a receipt existing for it (no gaps, no reuse).
-async function allocateReceiptNumberAndInsert(client, receiptData) {
+function formatInvoiceDocNumber(n) {
+  return 'INV-' + String(n).padStart(6, '0');
+}
+
+// ---------------------------------------------------------------------------
+// Sequential document numbering.
+//
+// Race-safe allocation + insert, all in one transaction on the caller's client.
+// The row lock on the counter serializes concurrent allocations; a failed insert
+// rolls the counter back too, so a number is never consumed without a document
+// existing for it (no gaps, no reuse).
+//
+// Receipts and invoices share this helper — only the counter table, prefix,
+// target table and column list differ. Those are the internal constants below,
+// never request data, so interpolating them into the SQL adds no injection
+// surface; every value is still passed as a bound parameter.
+// ---------------------------------------------------------------------------
+
+const RECEIPT_SERIES = {
+  counterTable: 'receipt_counter',
+  table: 'receipts',
+  format: formatInvoiceNumber,
+  columns: [
+    'issue_date', 'student_name', 'parent_name', 'parent_email', 'teacher_name',
+    'amount', 'currency', 'payment_method', 'payment_reference', 'fee_description',
+    'gst_treatment', 'invoice_id',
+  ],
+};
+
+const INVOICE_SERIES = {
+  counterTable: 'invoice_counter',
+  table: 'invoices',
+  format: formatInvoiceDocNumber,
+  columns: [
+    'issue_date', 'due_date', 'student_name', 'parent_name', 'parent_email',
+    'teacher_name', 'line_items', 'subtotal', 'discount_label', 'discount_amount',
+    'total', 'currency', 'fx_rate', 'fx_source', 'fx_date', 'fx_mode',
+    'inr_amount', 'notes',
+  ],
+};
+
+// line_items is JSONB: node-pg would render a JS array as a Postgres array
+// literal, so it is serialized explicitly.
+function bindValue(column, value) {
+  if (column === 'line_items') return value === null ? null : JSON.stringify(value);
+  return value;
+}
+
+// opts.beforeInsert(client) runs INSIDE the transaction, before the counter is
+// locked. It is how a caller enforces a cross-document invariant (e.g. "this
+// invoice is not already paid") atomically: throwing from it rolls the whole
+// transaction back, so no number is burned and no racing request can slip
+// between the check and the insert.
+async function allocateNumberAndInsert(series, client, data, opts = {}) {
   try {
     await client.query('BEGIN');
 
+    if (typeof opts.beforeInsert === 'function') {
+      await opts.beforeInsert(client);
+    }
+
     const { rows } = await client.query(
-      'SELECT last_number FROM receipt_counter WHERE id = 1 FOR UPDATE'
+      `SELECT last_number FROM ${series.counterTable} WHERE id = 1 FOR UPDATE`
     );
     const next = rows[0].last_number + 1;
-    const invoiceNumber = formatInvoiceNumber(next);
+    const documentNumber = series.format(next);
 
-    await client.query('UPDATE receipt_counter SET last_number = $1 WHERE id = 1', [next]);
+    await client.query(
+      `UPDATE ${series.counterTable} SET last_number = $1 WHERE id = 1`,
+      [next]
+    );
+
+    const columns = ['invoice_number', ...series.columns];
+    const placeholders = columns.map((_, i) => '$' + (i + 1)).join(', ');
+    const values = [
+      documentNumber,
+      ...series.columns.map((c) => bindValue(c, data[c] ?? null)),
+    ];
 
     const inserted = await client.query(
-      `INSERT INTO receipts
-         (invoice_number, issue_date, student_name, parent_name, parent_email,
-          teacher_name, amount, currency, payment_method, payment_reference,
-          fee_description, gst_treatment)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      `INSERT INTO ${series.table} (${columns.join(', ')})
+       VALUES (${placeholders})
        RETURNING *`,
-      [
-        invoiceNumber,
-        receiptData.issue_date,
-        receiptData.student_name,
-        receiptData.parent_name,
-        receiptData.parent_email,
-        receiptData.teacher_name ?? null,
-        receiptData.amount,
-        receiptData.currency,
-        receiptData.payment_method,
-        receiptData.payment_reference ?? null,
-        receiptData.fee_description,
-        receiptData.gst_treatment ?? null,
-      ]
+      values
     );
 
     await client.query('COMMIT');
@@ -66,8 +113,23 @@ async function allocateReceiptNumberAndInsert(client, receiptData) {
   }
 }
 
+function allocateReceiptNumberAndInsert(client, receiptData, opts) {
+  return allocateNumberAndInsert(RECEIPT_SERIES, client, receiptData, opts);
+}
+
+function allocateInvoiceNumberAndInsert(client, invoiceData, opts) {
+  return allocateNumberAndInsert(INVOICE_SERIES, client, invoiceData, opts);
+}
+
 async function ping() {
   await pool.query('SELECT 1');
 }
 
-module.exports = { pool, allocateReceiptNumberAndInsert, ping, formatInvoiceNumber };
+module.exports = {
+  pool,
+  allocateReceiptNumberAndInsert,
+  allocateInvoiceNumberAndInsert,
+  ping,
+  formatInvoiceNumber,
+  formatInvoiceDocNumber,
+};

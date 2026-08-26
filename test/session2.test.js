@@ -250,12 +250,14 @@ describe('counter hardening', () => {
     expect(await counterValue()).toBe(1);
   });
 
-  it('migrations 002/003 applied exactly once; re-run is a no-op', async () => {
+  it('every migration applied exactly once; re-run is a no-op', async () => {
     const { rows } = await db.pool.query('SELECT filename FROM schema_migrations ORDER BY filename');
     expect(rows.map((r) => r.filename)).toEqual([
       '001_init.sql',
       '002_harden_counter.sql',
       '003_sessions.sql',
+      '004_invoices.sql',
+      '005_receipt_invoice_link.sql',
     ]);
     const applied = await runMigrations(db.pool);
     expect(applied).toEqual([]);

@@ -51,4 +51,33 @@ async function sendReceiptEmail(receipt, pdfBuffer) {
   });
 }
 
-module.exports = { setTransport, sendReceiptEmail };
+function formatDueDate(d) {
+  const dt = d instanceof Date ? d : new Date(d);
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${String(dt.getDate()).padStart(2, '0')} ${months[dt.getMonth()]} ${dt.getFullYear()}`;
+}
+
+async function sendInvoiceEmail(invoice, pdfBuffer) {
+  const t = getTransport();
+  const from = `"Mathemajics" <${process.env.GMAIL_USER || 'receipts@mathemajics.invalid'}>`;
+  await t.sendMail({
+    from,
+    to: invoice.parent_email,
+    subject: `Invoice ${invoice.invoice_number} — Mathemajics`,
+    text:
+      `Dear ${invoice.parent_name},\n\n` +
+      `Invoice ${invoice.invoice_number} for ${invoice.student_name} — ` +
+      `${invoice.currency} ${Number(invoice.total).toFixed(2)} — is due on ` +
+      `${formatDueDate(invoice.due_date)}. The invoice is attached as a PDF.\n\n` +
+      `Warm regards,\nMathemajics`,
+    attachments: [
+      {
+        filename: `${invoice.invoice_number}.pdf`,
+        content: pdfBuffer,
+        contentType: 'application/pdf',
+      },
+    ],
+  });
+}
+
+module.exports = { setTransport, sendReceiptEmail, sendInvoiceEmail };

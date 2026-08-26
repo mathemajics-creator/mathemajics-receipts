@@ -7,6 +7,7 @@ const rateLimit = require('express-rate-limit');
 const db = require('./db');
 const auth = require('./auth');
 const receiptsRouter = require('./routes/receipts');
+const invoicesRouter = require('./routes/invoices');
 
 function createApp() {
   const app = express();
@@ -52,6 +53,7 @@ function createApp() {
   app.use('/api', auth.requireAdmin);
   app.post('/api/logout', auth.logout);
   app.use('/api/receipts', receiptsRouter);
+  app.use('/api/invoices', invoicesRouter);
 
   app.use((req, res) => {
     res.status(404).json({ error: 'not_found' });
