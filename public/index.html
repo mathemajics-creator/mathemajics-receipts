@@ -1,0 +1,485 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mathemajics &mdash; Invoices &amp; Receipts</title>
+<!-- Every script and stylesheet is an external file under /public. helmet's
+     Content-Security-Policy allows scripts and styles from "self" only, so
+     there is deliberately no inline script block, no inline style block, and
+     no on*= event attribute anywhere in this document. Handlers are attached
+     with addEventListener in app.js. -->
+<link rel="stylesheet" href="/styles.css">
+<script type="module" src="/app.js"></script>
+</head>
+<body>
+
+<!-- Login -->
+<div id="login-view" class="login-wrap">
+  <form id="login-form" class="card login-card">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">M</span>
+      <span class="brand-words">
+        <span class="brand-name">Mathemajics</span>
+        <span class="brand-sub">Invoices &amp; Receipts</span>
+      </span>
+    </div>
+    <label class="field">
+      <span class="field-label">Password</span>
+      <input id="login-password" type="password" autocomplete="current-password" required>
+    </label>
+    <p id="login-error" class="field-error" role="alert"></p>
+    <button id="login-submit" class="btn primary block" type="submit">Log in</button>
+  </form>
+</div>
+
+<!-- Main -->
+<div id="main-view" hidden>
+  <header class="topbar">
+    <div class="brand compact">
+      <span class="brand-mark" aria-hidden="true">M</span>
+      <span class="brand-words">
+        <span class="brand-name">Mathemajics</span>
+        <span class="brand-sub">Invoices &amp; Receipts</span>
+      </span>
+    </div>
+    <button id="logout" class="btn ghost" type="button">Log out</button>
+  </header>
+
+  <nav class="tabs" role="tablist" aria-label="Sections">
+    <button class="tab" id="tab-btn-invoices" type="button" role="tab" data-tab="invoices">Invoices</button>
+    <button class="tab" id="tab-btn-receipts" type="button" role="tab" data-tab="receipts">Receipts</button>
+    <button class="tab" id="tab-btn-new" type="button" role="tab" data-tab="new">New</button>
+  </nav>
+
+  <div id="banner" class="banner" role="status" hidden>
+    <span id="banner-text" class="banner-text"></span>
+    <button id="banner-action" class="btn link" type="button" hidden></button>
+    <button id="banner-close" class="btn link banner-close" type="button" aria-label="Dismiss message">&#10005;</button>
+  </div>
+
+  <!-- Invoices list -->
+  <section id="panel-invoices" class="panel" role="tabpanel" aria-labelledby="tab-btn-invoices">
+    <div class="panel-head">
+      <h2 class="panel-title">Invoices</h2>
+      <button id="inv-export" class="btn ghost" type="button">Download CSV for accountant</button>
+    </div>
+
+    <form id="inv-filters" class="filters">
+      <label class="field">
+        <span class="field-label">Student</span>
+        <input id="inv-f-student" type="search" placeholder="Search name">
+      </label>
+      <label class="field">
+        <span class="field-label">From</span>
+        <input id="inv-f-from" type="date">
+      </label>
+      <label class="field">
+        <span class="field-label">To</span>
+        <input id="inv-f-to" type="date">
+      </label>
+      <label class="field">
+        <span class="field-label">Status</span>
+        <select id="inv-f-status">
+          <option value="">All</option>
+          <option value="issued">Issued</option>
+          <option value="voided">Voided</option>
+        </select>
+      </label>
+      <label class="field">
+        <span class="field-label">Payment</span>
+        <select id="inv-f-paid">
+          <option value="">All</option>
+          <option value="false">Unpaid</option>
+          <option value="true">Paid</option>
+        </select>
+      </label>
+      <div class="filter-actions">
+        <button class="btn" type="submit">Apply</button>
+        <button id="inv-f-clear" class="btn ghost" type="button">Clear</button>
+      </div>
+    </form>
+
+    <p id="inv-state" class="state" role="status"></p>
+
+    <div class="table-scroll">
+      <table class="grid">
+        <thead>
+          <tr>
+            <th scope="col">Invoice</th>
+            <th scope="col">Issued</th>
+            <th scope="col">Student</th>
+            <th scope="col" class="num">Total</th>
+            <th scope="col">Status</th>
+            <th scope="col">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="inv-rows"></tbody>
+      </table>
+    </div>
+
+    <div class="pager">
+      <button id="inv-prev" class="btn ghost" type="button">Previous</button>
+      <span id="inv-page" class="pager-label"></span>
+      <button id="inv-next" class="btn ghost" type="button">Next</button>
+    </div>
+  </section>
+
+  <!-- Receipts list -->
+  <section id="panel-receipts" class="panel" role="tabpanel" aria-labelledby="tab-btn-receipts" hidden>
+    <div class="panel-head">
+      <h2 class="panel-title">Receipts</h2>
+      <button id="rcp-export" class="btn ghost" type="button">Download CSV for accountant</button>
+    </div>
+
+    <form id="rcp-filters" class="filters">
+      <label class="field">
+        <span class="field-label">Student</span>
+        <input id="rcp-f-student" type="search" placeholder="Search name">
+      </label>
+      <label class="field">
+        <span class="field-label">From</span>
+        <input id="rcp-f-from" type="date">
+      </label>
+      <label class="field">
+        <span class="field-label">To</span>
+        <input id="rcp-f-to" type="date">
+      </label>
+      <label class="field">
+        <span class="field-label">Status</span>
+        <select id="rcp-f-status">
+          <option value="">All</option>
+          <option value="issued">Issued</option>
+          <option value="voided">Voided</option>
+        </select>
+      </label>
+      <div class="filter-actions">
+        <button class="btn" type="submit">Apply</button>
+        <button id="rcp-f-clear" class="btn ghost" type="button">Clear</button>
+      </div>
+    </form>
+
+    <p id="rcp-state" class="state" role="status"></p>
+
+    <div class="table-scroll">
+      <table class="grid">
+        <thead>
+          <tr>
+            <th scope="col">Receipt</th>
+            <th scope="col">Date</th>
+            <th scope="col">Student</th>
+            <th scope="col" class="num">Amount</th>
+            <th scope="col">Status</th>
+            <th scope="col">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="rcp-rows"></tbody>
+      </table>
+    </div>
+
+    <div class="pager">
+      <button id="rcp-prev" class="btn ghost" type="button">Previous</button>
+      <span id="rcp-page" class="pager-label"></span>
+      <button id="rcp-next" class="btn ghost" type="button">Next</button>
+    </div>
+  </section>
+
+  <!-- New -->
+  <section id="panel-new" class="panel" role="tabpanel" aria-labelledby="tab-btn-new" hidden>
+    <div class="subchoice" role="group" aria-label="What would you like to create?">
+      <button id="new-choice-invoice" class="btn choice" type="button">New invoice</button>
+      <button id="new-choice-receipt" class="btn choice" type="button">New receipt</button>
+    </div>
+
+    <!-- New invoice -->
+    <form id="invoice-form" class="doc-form card">
+      <h2 class="form-title">New invoice</h2>
+      <p class="form-note">The parent is emailed as soon as you confirm.</p>
+
+      <div class="row">
+        <label class="field">
+          <span class="field-label">Issue date</span>
+          <input id="iv-issue-date" type="date" required>
+        </label>
+        <label class="field">
+          <span class="field-label">Due date</span>
+          <input id="iv-due-date" type="date" required>
+        </label>
+        <label class="field">
+          <span class="field-label">Currency</span>
+          <select id="iv-currency">
+            <option value="AUD">AUD</option>
+            <option value="USD">USD</option>
+            <option value="INR">INR</option>
+          </select>
+        </label>
+      </div>
+      <p class="field-error" id="err-iv-issue_date"></p>
+      <p class="field-error" id="err-iv-due_date"></p>
+      <p class="field-error" id="err-iv-currency"></p>
+
+      <div class="row">
+        <label class="field">
+          <span class="field-label">Student name</span>
+          <input id="iv-student" type="text" maxlength="200" required>
+        </label>
+        <label class="field">
+          <span class="field-label">Parent name</span>
+          <input id="iv-parent" type="text" maxlength="200" required>
+        </label>
+      </div>
+      <p class="field-error" id="err-iv-student_name"></p>
+      <p class="field-error" id="err-iv-parent_name"></p>
+
+      <div class="row">
+        <label class="field">
+          <span class="field-label">Parent email</span>
+          <input id="iv-email" type="email" maxlength="200" required>
+        </label>
+        <label class="field">
+          <span class="field-label">Teacher name <span class="hint">(optional)</span></span>
+          <input id="iv-teacher" type="text" maxlength="200">
+        </label>
+      </div>
+      <p class="field-error" id="err-iv-parent_email"></p>
+      <p class="field-error" id="err-iv-teacher_name"></p>
+
+      <fieldset class="items">
+        <legend>Items</legend>
+        <div id="iv-items"></div>
+        <p class="field-error" id="err-iv-line_items"></p>
+        <div class="items-foot">
+          <button id="iv-add-item" class="btn ghost" type="button">Add item</button>
+          <span id="iv-items-note" class="hint"></span>
+        </div>
+      </fieldset>
+
+      <fieldset class="discount">
+        <legend>Discount <span class="hint">(optional)</span></legend>
+        <div class="row">
+          <label class="field">
+            <span class="field-label">Label</span>
+            <input id="iv-discount-label" type="text" maxlength="200" placeholder="e.g. Sibling discount">
+          </label>
+          <label class="field">
+            <span class="field-label">Amount</span>
+            <input id="iv-discount-amount" type="number" min="0" step="0.01" inputmode="decimal">
+          </label>
+        </div>
+        <p class="field-error" id="err-iv-discount_label"></p>
+        <p class="field-error" id="err-iv-discount_amount"></p>
+      </fieldset>
+
+      <div class="totals">
+        <div class="total-line"><span>Subtotal</span><span id="iv-subtotal" class="num">0.00</span></div>
+        <div class="total-line" id="iv-discount-line" hidden><span id="iv-discount-name">Discount</span><span id="iv-discount-display" class="num">0.00</span></div>
+        <div class="total-line grand"><span>Total</span><span id="iv-total" class="num">0.00</span></div>
+      </div>
+      <p class="field-error" id="err-iv-subtotal"></p>
+      <p class="field-error" id="err-iv-total"></p>
+
+      <fieldset class="fx">
+        <legend>Indian rupees</legend>
+        <label class="checkline">
+          <input id="iv-show-inr" type="checkbox">
+          <span>Show INR amount</span>
+        </label>
+
+        <div id="iv-fx" class="fx-body" hidden>
+          <p id="iv-fx-status" class="hint" role="status"></p>
+
+          <div class="radios" role="radiogroup" aria-label="How the rupee figure is used">
+            <label class="checkline">
+              <input type="radio" name="iv-fx-mode" value="payable" checked>
+              <span>Parent is paying in INR</span>
+            </label>
+            <label class="checkline">
+              <input type="radio" name="iv-fx-mode" value="indicative">
+              <span id="iv-fx-indicative-label">Just showing the equivalent &mdash; payment is in AUD</span>
+            </label>
+          </div>
+          <p class="field-error" id="err-iv-fx_mode"></p>
+
+          <div class="row">
+            <label class="field">
+              <span class="field-label">Rate (1 unit to INR)</span>
+              <input id="iv-fx-rate" type="number" min="0" step="0.000001" inputmode="decimal">
+            </label>
+            <label class="field">
+              <span class="field-label">Rate source</span>
+              <input id="iv-fx-source" type="text" maxlength="100">
+            </label>
+            <label class="field">
+              <span class="field-label">Rate date</span>
+              <input id="iv-fx-date" type="date">
+            </label>
+          </div>
+          <p class="field-error" id="err-iv-fx_rate"></p>
+          <p class="field-error" id="err-iv-fx_source"></p>
+          <p class="field-error" id="err-iv-fx_date"></p>
+
+          <div class="row">
+            <label class="field">
+              <span class="field-label">INR amount</span>
+              <input id="iv-inr-amount" type="number" min="0" step="0.01" inputmode="decimal">
+            </label>
+            <div class="field">
+              <span class="field-label">Calculated</span>
+              <span id="iv-inr-calc" class="calc num">&mdash;</span>
+            </div>
+          </div>
+          <p class="field-error" id="err-iv-inr_amount"></p>
+          <p id="iv-fx-warn" class="warn-inline" hidden></p>
+        </div>
+      </fieldset>
+
+      <label class="field">
+        <span class="field-label">Notes <span class="hint">(optional)</span></span>
+        <textarea id="iv-notes" rows="3" maxlength="2000"></textarea>
+      </label>
+      <p class="field-error" id="err-iv-notes"></p>
+
+      <p id="iv-form-error" class="field-error" role="alert"></p>
+      <button id="iv-submit" class="btn primary block" type="submit">Review and issue invoice</button>
+    </form>
+
+    <!-- New receipt -->
+    <form id="receipt-form" class="doc-form card" hidden>
+      <h2 class="form-title">New receipt</h2>
+      <p class="form-note">Records money already received. The parent is emailed as soon as you confirm.</p>
+
+      <fieldset class="linkbox">
+        <legend>Against invoice</legend>
+        <label class="field">
+          <span class="field-label">Search unpaid invoices</span>
+          <input id="rc-invoice-search" type="search" placeholder="Invoice number or student">
+        </label>
+        <label class="field">
+          <span class="field-label">Invoice</span>
+          <select id="rc-invoice"></select>
+        </label>
+        <p id="rc-invoice-note" class="hint"></p>
+      </fieldset>
+
+      <div class="row">
+        <label class="field">
+          <span class="field-label">Issue date</span>
+          <input id="rc-issue-date" type="date" required>
+        </label>
+        <label class="field">
+          <span class="field-label">Amount</span>
+          <input id="rc-amount" type="number" min="0" step="0.01" inputmode="decimal" required>
+        </label>
+        <label class="field">
+          <span class="field-label">Currency</span>
+          <select id="rc-currency">
+            <option value="AUD">AUD</option>
+            <option value="USD">USD</option>
+            <option value="INR">INR</option>
+          </select>
+        </label>
+      </div>
+      <p class="field-error" id="err-rc-issue_date"></p>
+      <p class="field-error" id="err-rc-amount"></p>
+      <p class="field-error" id="err-rc-currency"></p>
+
+      <div class="row">
+        <label class="field">
+          <span class="field-label">Student name</span>
+          <input id="rc-student" type="text" maxlength="200" required>
+        </label>
+        <label class="field">
+          <span class="field-label">Parent name</span>
+          <input id="rc-parent" type="text" maxlength="200" required>
+        </label>
+      </div>
+      <p class="field-error" id="err-rc-student_name"></p>
+      <p class="field-error" id="err-rc-parent_name"></p>
+
+      <div class="row">
+        <label class="field">
+          <span class="field-label">Parent email</span>
+          <input id="rc-email" type="email" maxlength="200" required>
+        </label>
+        <label class="field">
+          <span class="field-label">Teacher name <span class="hint">(optional)</span></span>
+          <input id="rc-teacher" type="text" maxlength="200">
+        </label>
+      </div>
+      <p class="field-error" id="err-rc-parent_email"></p>
+      <p class="field-error" id="err-rc-teacher_name"></p>
+
+      <div class="row">
+        <label class="field">
+          <span class="field-label">Payment method</span>
+          <select id="rc-method">
+            <option value="bank_transfer">Bank transfer</option>
+            <option value="paypal">PayPal</option>
+            <option value="upi">UPI</option>
+            <option value="other">Other</option>
+          </select>
+        </label>
+        <label class="field">
+          <span class="field-label">Payment reference <span class="hint">(optional)</span></span>
+          <input id="rc-reference" type="text" maxlength="200">
+        </label>
+      </div>
+      <p class="field-error" id="err-rc-payment_method"></p>
+      <p class="field-error" id="err-rc-payment_reference"></p>
+
+      <label class="field">
+        <span class="field-label">Description</span>
+        <input id="rc-description" type="text" maxlength="500" required placeholder="e.g. August tuition fees">
+      </label>
+      <p class="field-error" id="err-rc-fee_description"></p>
+
+      <p id="rc-form-error" class="field-error" role="alert"></p>
+      <button id="rc-submit" class="btn primary block" type="submit">Review and issue receipt</button>
+    </form>
+  </section>
+</div>
+
+<!-- Confirm / reason dialog -->
+<div id="dialog-overlay" class="overlay" hidden>
+  <div class="dialog card" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
+    <h2 id="dialog-title" class="dialog-title"></h2>
+    <div id="dialog-body" class="dialog-body"></div>
+    <div id="dialog-input-wrap" class="field" hidden>
+      <label class="field-label" id="dialog-input-label" for="dialog-input"></label>
+      <textarea id="dialog-input" rows="3" maxlength="500"></textarea>
+      <p id="dialog-input-error" class="field-error"></p>
+    </div>
+    <div class="dialog-actions">
+      <button id="dialog-cancel" class="btn ghost" type="button">Cancel</button>
+      <button id="dialog-confirm" class="btn primary" type="button">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- Cloned by app.js. Keeping row markup here rather than in a JavaScript
+     string means no rendered value ever passes through innerHTML. -->
+<template id="tpl-line-item">
+  <div class="line-item">
+    <label class="field li-desc">
+      <span class="field-label">Description</span>
+      <input type="text" data-li="description" maxlength="200">
+    </label>
+    <label class="field li-qty">
+      <span class="field-label">Qty</span>
+      <input type="number" data-li="qty" min="0" step="0.01" inputmode="decimal">
+    </label>
+    <label class="field li-rate">
+      <span class="field-label">Rate</span>
+      <input type="number" data-li="rate" min="0" step="0.01" inputmode="decimal">
+    </label>
+    <div class="field li-amount">
+      <span class="field-label">Amount</span>
+      <span class="calc num" data-li="amount">0.00</span>
+    </div>
+    <button type="button" class="btn ghost li-remove">Remove</button>
+    <p class="field-error" data-li="error"></p>
+  </div>
+</template>
+
+</body>
+</html>

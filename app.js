@@ -1,6 +1,7 @@
 // app.js — builds the Express app. A factory so tests can create fresh
 // instances (rate-limiter counters are per-instance).
 
+const path = require('path');
 const express = require('express');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
@@ -9,10 +10,43 @@ const auth = require('./auth');
 const receiptsRouter = require('./routes/receipts');
 const invoicesRouter = require('./routes/invoices');
 
+const PUBLIC_DIR = path.join(__dirname, 'public');
+
 function createApp() {
   const app = express();
-  app.use(helmet());
+
+  // helmet's defaults, with exactly ONE directive extended: connect-src.
+  //
+  // The new-invoice screen offers to look up today's currency rate so the owner
+  // can confirm it rather than type it from memory. That lookup happens in the
+  // BROWSER, not here — the server never makes an outbound rate call, so the
+  // path that writes a record stays entirely offline and no outside service can
+  // stand between the owner and an issued invoice.
+  //
+  // Because the fetch is made by the page, the page's CSP has to allow it, and
+  // helmet's default connect-src falls back to default-src 'self'. Only the one
+  // origin is added. script-src, style-src, img-src, default-src and the rest
+  // keep helmet's defaults untouched — in particular script-src stays 'self',
+  // so no external code can ever run on this page.
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          'connect-src': ["'self'", 'https://api.frankfurter.dev'],
+        },
+      },
+    })
+  );
   app.use(express.json({ limit: '100kb' }));
+
+  // The screens. Deliberately NOT behind requireAdmin: an HTML page, a
+  // stylesheet and some JavaScript are not secrets, and gating them would only
+  // mean the login screen could not load. Every piece of DATA stays behind the
+  // API's auth, which is where the guarantee belongs.
+  app.use(express.static(PUBLIC_DIR, { index: false }));
+  app.get('/', (req, res) => {
+    res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
+  });
 
   // Unauthenticated health check — unchanged from Session 1.
   app.get('/health', async (req, res) => {
