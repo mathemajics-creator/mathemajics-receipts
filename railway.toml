@@ -1,0 +1,26 @@
+# railway.toml — how Railway builds and runs this service.
+#
+# The Node version is NOT pinned here: nixpacks reads `engines.node` from
+# package.json ("20.x"), so there is one place to change it and no way for the
+# two to drift apart. Local development has been on Node 24; production is
+# pinned to 20 so a deploy is reproducible.
+
+[build]
+builder = "nixpacks"
+
+[deploy]
+# Migrations run inside this command, before the server listens. If they fail
+# the process exits non-zero and Railway restarts it — it never serves on a
+# half-migrated schema.
+startCommand = "node server.js"
+
+# /health does a live database ping, so a deploy is only promoted once the app
+# can actually reach its database. The window is generous because migrations
+# run before the first byte is served.
+healthcheckPath = "/health"
+healthcheckTimeout = 120
+
+# A crash should be retried, not left down — but not forever, so a genuinely
+# broken deploy stops burning restarts and shows up as failed.
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 10

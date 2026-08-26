@@ -40,9 +40,29 @@ types.setTypeParser(types.builtins.DATE, (value) => value); // OID 1082
 // does not await that handler before handing the client out.
 const DATESTYLE = '-c datestyle=ISO,MDY';
 
+// TLS to the database.
+//
+// The default follows NODE_ENV, which is what a real deployment wants: Railway
+// reaches Postgres over TLS with a certificate no public CA signed, so
+// verification is off while the connection is still encrypted.
+//
+// An explicit `sslmode` in DATABASE_URL overrides that default. It is the
+// standard libpq parameter, so it is what anyone would reach for, and it earns
+// its place twice: a local Postgres normally has SSL switched off altogether
+// and refuses the negotiation outright ("The server does not support SSL
+// connections"), so `?sslmode=disable` is what lets the deployment simulation
+// run the real production code path against a throwaway local database; and a
+// deployment whose database does not offer TLS can say so without a code edit.
+function databaseSsl(url = process.env.DATABASE_URL || '') {
+  const mode = (/[?&]sslmode=([^&]+)/.exec(url) || [])[1];
+  if (mode === 'disable') return false;
+  if (mode !== undefined) return { rejectUnauthorized: mode === 'verify-full' };
+  return process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false;
+}
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  ssl: databaseSsl(),
   keepAlive: true,
   options: DATESTYLE,
 });
@@ -170,4 +190,5 @@ module.exports = {
   ping,
   formatInvoiceNumber,
   formatInvoiceDocNumber,
+  databaseSsl, // exported for the deployment tests
 };

@@ -233,3 +233,96 @@ which is why every handler is attached in `public/app.js` rather than written
 into the HTML. The single exception is the currency-rate lookup, which the
 browser makes directly to `api.frankfurter.dev` — the server itself never calls
 out for a rate, so recording a document never depends on an outside service.
+
+## Settings the tool reads
+
+Every setting is an environment variable. Locally they live in a `.env` file
+(copied from `.env.example`, never committed). **In production they are not a
+file at all** — they are typed into the Railway dashboard, under the app
+service's **Variables** tab.
+
+**No password, hash or app password belongs in this repository, in a commit, or
+in a chat message. Ever.** The only place they go is the Railway dashboard and
+your password manager.
+
+| Variable | Needed? | What it is |
+|---|---|---|
+| `DATABASE_URL` | **Required** | Railway fills this in for you once a Postgres database is added. Don't type it by hand. |
+| `NODE_ENV` | **Required** | Set to `production` in Railway. |
+| `PORT` | **Required** | Railway fills this in for you. Don't type it by hand. |
+| `ADMIN_PASSWORD_HASH` | **Required** | The scrambled version of your login password, from `npm run hash-password`. Without it the site still loads but nobody can log in. |
+| `GMAIL_USER` | Required for email | The Gmail address invoices are sent from. |
+| `GMAIL_APP_PASSWORD` | Required for email | A Gmail **App Password**, not your normal password. Without these two, documents are still recorded correctly — the email just fails and you use **Retry email**. |
+| `SESSION_TTL_HOURS` | Optional | How long a login lasts. Defaults to 12. |
+| `BRAND_WEBSITE` | Optional | Overrides the website printed on the PDFs. |
+| `BRAND_EMAIL` | Optional | Overrides the email address printed on the PDFs. |
+| `BRAND_LOGO_PATH` | Optional | Where the logo file is. Defaults to the one in this repo. |
+
+## Deploying to Railway
+
+The app runs as one Railway service: it serves the API **and** the screens, so
+there is nothing else to deploy. `railway.toml` tells Railway how to build and
+run it, and Node is pinned to version 20 by `engines` in `package.json`.
+
+### Putting it live
+
+1. In Railway, create a project from the GitHub repo, then add a **PostgreSQL**
+   database to the same project. Railway links `DATABASE_URL` automatically.
+2. In the app service → **Variables**, set the required variables from the table
+   above. Save — Railway redeploys by itself.
+3. App service → **Settings** → **Networking** → **Generate Domain**.
+4. Visit that address with `/health` on the end.
+
+The database tables are created automatically the first time the app starts, and
+every time after that it checks whether anything new needs applying. **If that
+step fails the app deliberately refuses to start**, so it can never serve pages
+on a half-finished database.
+
+### Checking it worked
+
+Open **your address + `/health`**. You want:
+
+```json
+{"ok":true,"uptime":12.3}
+```
+
+- **`{"ok":false,"error":"db_unreachable"}`** — the app is running but cannot
+  reach the database. Check the Postgres service is running and that
+  `DATABASE_URL` is set on the app service.
+- **The page won't load at all** — look at the service's **Deploy Logs** in
+  Railway. If migrations failed, the reason is the last thing printed.
+
+Then open the address itself; you should get the login screen.
+
+### If it boots but you can't log in
+
+Look at the top of the deploy log for a line starting `startup:`. If it says
+`ADMIN_PASSWORD_HASH is not set`, that variable is missing or empty — generate
+one with `npm run hash-password` and add it in Railway. The log only ever names
+the setting; it never prints its value.
+
+### If it boots but email fails
+
+This is the common one, and nothing is lost when it happens: the invoice or
+receipt is fully recorded, and its row shows **Email failed** with a **Retry
+email** button. Check, in order:
+
+1. `GMAIL_APP_PASSWORD` is the 16-character **App Password**, not your ordinary
+   Gmail password.
+2. It was pasted without spaces.
+3. 2-Step Verification is still switched on for that Google account — turning it
+   off silently invalidates every app password.
+4. `GMAIL_USER` is the full address.
+
+Fix the variable, let Railway redeploy, then press **Retry email** on the rows
+that failed. Nothing needs re-issuing.
+
+### Rolling back
+
+In the Railway dashboard, open the app service, go to **Deployments**, find the
+last deployment that worked, and choose **Redeploy**. That puts the previous
+code back.
+
+Rolling back the **code** does not undo **data** — issued invoices and receipts
+stay exactly as they are. That is deliberate: they are permanent records, and
+nothing in this tool deletes one.
