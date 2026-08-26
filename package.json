@@ -1,0 +1,23 @@
+{
+  "name": "mathemajics-receipts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Standalone fee receipt tool for Mathemajics — sequential numbering, immutable records",
+  "type": "commonjs",
+  "engines": {
+    "node": "20.x"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "test": "vitest run",
+    "migrate": "node migrate.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "pg": "^8.12.0"
+  },
+  "devDependencies": {
+    "vitest": "^2.1.9"
+  }
+}
