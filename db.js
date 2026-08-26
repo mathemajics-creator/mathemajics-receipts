@@ -9,6 +9,12 @@ const pool = new Pool({
   keepAlive: true,
 });
 
+// Without this, an error on an idle pooled connection (e.g. the DB dropping
+// it) is an unhandled 'error' event and kills the whole process.
+pool.on('error', (err) => {
+  console.error('pg pool: idle client error:', err.message);
+});
+
 function formatInvoiceNumber(n) {
   return 'RCPT-' + String(n).padStart(6, '0');
 }

@@ -218,7 +218,7 @@ describe('immutability — blocked direction', () => {
   it('12. counter decrease and schema_migrations delete → rejected', async () => {
     await expect(
       pool.query('UPDATE receipt_counter SET last_number = $1 WHERE id = 1', [0])
-    ).rejects.toThrow(/only increase/);
+    ).rejects.toThrow(/may only incre/); // "increase" (001) / "increment by exactly 1" (002)
     await expect(pool.query('DELETE FROM schema_migrations')).rejects.toThrow(/append-only/);
     await expect(
       pool.query('UPDATE schema_migrations SET applied_at = now()')

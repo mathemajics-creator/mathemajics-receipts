@@ -1,25 +1,11 @@
-// server.js — minimal server for Session 1: /health only.
-// Runs migrations before listening; refuses to start on migration failure.
+// server.js — boots the app: migrations first, refuse to start on failure.
 
 require('dotenv').config();
-const express = require('express');
 const db = require('./db');
 const { runMigrations } = require('./migrate');
+const { createApp } = require('./app');
 
-const app = express();
-
-app.get('/health', async (req, res) => {
-  try {
-    await db.ping();
-    res.status(200).json({ ok: true, uptime: process.uptime() });
-  } catch (err) {
-    res.status(503).json({ ok: false, error: 'db_unreachable' });
-  }
-});
-
-app.use((req, res) => {
-  res.status(404).json({ error: 'not_found' });
-});
+const app = createApp();
 
 module.exports = app;
 

@@ -11,8 +11,9 @@ code, its own database.
 - Once issued, a receipt can never be edited or deleted. If one was created by
   mistake, it is *voided* — the number stays in the series with a reason recorded.
 
-This session contains only the database layer and a health check. Receipt
-entry, PDF generation, and emailing come in later sessions.
+The backend now covers: admin login, recording a receipt (which generates the
+PDF and emails it to the parent automatically), searching past receipts,
+voiding, and a CSV export for the accountant. The screens come in Session 3.
 
 ## Setup
 
@@ -22,6 +23,23 @@ entry, PDF generation, and emailing come in later sessions.
 ```bash
 npm install
 ```
+
+3. **Set the admin password.** Run:
+
+```bash
+npm run hash-password
+```
+
+Type your chosen password when asked (it shows as `*`). Copy the long code it
+prints into `.env` as `ADMIN_PASSWORD_HASH=...`. The real password is never
+stored anywhere — only this scrambled version.
+
+4. **Connect Gmail (for emailing receipts).** In your Google account, first
+turn on 2-Step Verification, then create an *App Password*
+(myaccount.google.com → Security → 2-Step Verification → App passwords).
+Put your Gmail address in `GMAIL_USER` and the 16-character app password in
+`GMAIL_APP_PASSWORD`. If these are left empty the tool still records receipts —
+emails just fail politely and can be retried later.
 
 ## Running migrations
 
