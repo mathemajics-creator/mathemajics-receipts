@@ -104,10 +104,16 @@ export function buildQuery(params) {
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-// The API serializes Postgres DATE columns through JSON, which turns them into
-// full timestamps ("2026-08-25T00:00:00.000Z"). Plain "YYYY-MM-DD" strings are
-// taken as written; anything else is read back through the browser's local
-// timezone, which is the inverse of how the server wrote it.
+// The API sends every DATE column as a plain "YYYY-MM-DD" string, which is
+// taken exactly as written — a calendar date carries no timezone, so none is
+// applied.
+//
+// The timestamp branch below is a safety net, not the normal path. It used to
+// be the normal path: the API once serialized DATE columns as full timestamps
+// ("2026-08-25T00:00:00.000Z"), which a browser west of the server would read
+// back as the previous day. The server was fixed to emit plain dates; this
+// branch stays so an unexpected shape still renders a sensible day instead of
+// an empty cell.
 export function dateParts(value) {
   if (value === null || value === undefined || value === '') return null;
   if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {

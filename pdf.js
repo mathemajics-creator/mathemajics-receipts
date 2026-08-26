@@ -4,12 +4,13 @@
 // No tax, GST or ABN wording appears in either template, by design.
 //
 // Every colour and identity string comes from branding.js, and every money
-// figure is formatted by format.js — the same formatter the emails use.
+// figure and date is formatted by format.js — the same formatters the emails,
+// the CSV exports and the API responses use.
 
 const fs = require('fs');
 const PDFDocument = require('pdfkit');
 const B = require('./branding');
-const { money } = require('./format');
+const { money, longDate } = require('./format');
 
 // ---------------------------------------------------------------------------
 // Logo, loaded once at module load. A missing or unreadable file must never
@@ -76,13 +77,11 @@ const PAYMENT_METHOD_LABELS = {
 
 // ── Value formatting ──────────────────────────────────────────────────────
 
-function formatDate(d) {
-  // issue_date arrives from Postgres as a Date at local midnight — format
-  // locally (toISOString would shift the day in non-UTC timezones).
-  const dt = d instanceof Date ? d : new Date(d);
-  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  return `${String(dt.getDate()).padStart(2, '0')} ${months[dt.getMonth()]} ${dt.getFullYear()}`;
-}
+// Dates are written by format.js, where money() lives, for the same reason: a
+// date printed on a PDF must not disagree with the one in the email beside it,
+// in the CSV, or in the API. DATE columns arrive as 'YYYY-MM-DD' and the sample
+// script hands over Date objects; longDate takes either without moving the day.
+const formatDate = longDate;
 
 // Trailing zeros off, but never fewer than 2 decimals (a rate reads as money).
 function rateText(v) {

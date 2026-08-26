@@ -1,12 +1,50 @@
 // db.js — PostgreSQL access layer. All queries parameterized; no string-built SQL.
 
 require('dotenv').config();
-const { Pool } = require('pg');
+const { Pool, types } = require('pg');
+
+// ---------------------------------------------------------------------------
+// DATE columns come back as plain 'YYYY-MM-DD' strings, not Date objects.
+//
+// By default node-postgres turns a DATE into a JS Date at the *server's* local
+// midnight. That object then serializes to JSON as a full UTC timestamp
+// ("2026-08-25T00:00:00.000Z", or "2026-08-24T14:00:00.000Z" from a UTC+10
+// host), and whoever reads it has to guess which timezone to undo. A browser
+// west of the server would render the previous day — a silently wrong date on
+// a financial record, which is the one kind of wrong these documents may never
+// be.
+//
+// A DATE has no time and no timezone: 25 August 2026 is the same day
+// everywhere. Handing the string straight through is the only representation
+// that cannot drift, and it is what every surface already wants — the JSON
+// responses, the CSV exports, and format.js for the PDFs and emails.
+//
+// This changes nothing in the database and nothing about what is stored; only
+// how a value is handed to this process. TIMESTAMPTZ columns (created_at,
+// voided_at, email_sent_at) are a different OID and keep their Date objects —
+// those really are moments in time.
+//
+// The parser hands back the RAW string the server sent, so the format of that
+// string must not depend on a server-side setting. Postgres renders a DATE
+// according to DateStyle: the default is ISO ('2026-08-25'), but a server, a
+// database, a role or a connection can be set to German ('25.08.2026') or SQL
+// ('08/25/2026'), and then every date this API emits changes shape without a
+// line of code changing. DATESTYLE below pins it on the connection itself, so
+// the wire format is a property of this application rather than of whatever
+// host it happens to be pointed at — the same argument format.js makes for not
+// using toLocaleString.
+types.setTypeParser(types.builtins.DATE, (value) => value); // OID 1082
+
+// Sent in the startup packet, which means it is in force before the first query
+// can run. A `SET` in a pool 'connect' handler would leave a window: node-pg
+// does not await that handler before handing the client out.
+const DATESTYLE = '-c datestyle=ISO,MDY';
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
   keepAlive: true,
+  options: DATESTYLE,
 });
 
 // Without this, an error on an idle pooled connection (e.g. the DB dropping

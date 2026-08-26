@@ -3,9 +3,10 @@
 
 const nodemailer = require('nodemailer');
 
-// The same formatter the PDF uses. An email body that disagreed with the
-// document attached to it would read as an error to the parent.
-const { money } = require('./format');
+// The same formatters the PDF uses. An email body that disagreed with the
+// document attached to it — about an amount or about a day — would read as an
+// error to the parent.
+const { money, longDate } = require('./format');
 
 let transport = null;
 
@@ -55,11 +56,7 @@ async function sendReceiptEmail(receipt, pdfBuffer) {
   });
 }
 
-function formatDueDate(d) {
-  const dt = d instanceof Date ? d : new Date(d);
-  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  return `${String(dt.getDate()).padStart(2, '0')} ${months[dt.getMonth()]} ${dt.getFullYear()}`;
-}
+const formatDueDate = longDate;
 
 async function sendInvoiceEmail(invoice, pdfBuffer) {
   const t = getTransport();

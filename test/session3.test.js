@@ -417,9 +417,9 @@ describe('dates', () => {
     expect(fmtDate('2026-08-25')).toBe('25 Aug 2026');
   });
 
-  it('32. a JSON timestamp is read back through the local timezone', () => {
-    // How the API serializes a Postgres DATE: a Date at the server's local
-    // midnight, stringified as UTC. Reading it back locally is the inverse.
+  it('32. a JSON timestamp is still read back through the local timezone', () => {
+    // Not how the API sends dates any more — it sends plain YYYY-MM-DD (see
+    // session3b). This pins the fallback branch, which stays as a safety net.
     const local = new Date(2026, 7, 25);
     expect(isoDate(local.toISOString())).toBe('2026-08-25');
     expect(fmtDate(local.toISOString())).toBe('25 Aug 2026');
