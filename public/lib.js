@@ -85,6 +85,34 @@ export function hasAtMost2dp(n) {
   return Math.abs(n * 100 - Math.round(n * 100)) < 1e-6;
 }
 
+// ── Saved-PDF filenames ─────────────────────────────────────────────────────
+
+// The name a saved PDF lands under when the owner is going to attach it to an
+// email by hand: "INV-000123 - Aarav Sharma.pdf". The document number leads,
+// because that is what the records are searched by; the student's name follows
+// so the right file can be picked out of a downloads folder at a glance.
+//
+// Windows forbids \ / : * ? " < > | outright and quietly mangles a trailing dot
+// or space. Every forbidden character is REPLACED rather than dropped, so two
+// students whose names differ only in punctuation cannot collapse onto one
+// filename. The length cap keeps the longest name the forms allow (200
+// characters) from producing a path Windows refuses to write.
+export function documentFileName(documentNumber, studentName) {
+  const clean = (value) =>
+    String(value === null || value === undefined ? '' : value)
+      .replace(/[\\/:*?"<>|]/g, '-')
+      .replace(/[\u0000-\u001f\u007f]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .replace(/[. ]+$/, '');
+
+  const number = clean(documentNumber);
+  const student = clean(studentName);
+  let base = student ? `${number} - ${student}` : number;
+  if (base.length > 120) base = base.slice(0, 120).replace(/[. ]+$/, '');
+  return (base || 'document') + '.pdf';
+}
+
 // ── Query strings ───────────────────────────────────────────────────────────
 
 // Builds "?a=1&b=2" from a plain object, dropping empty values so a blank

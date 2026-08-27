@@ -64,6 +64,7 @@ import {
   fmtDate,
   addDaysIso,
   fieldMessage,
+  documentFileName,
 } from '../public/lib.js';
 
 import { filenameFromDisposition } from '../public/api.js';
@@ -489,6 +490,32 @@ describe('download filenames', () => {
     ).toBe('invoices-export-2026-08-26.csv');
     expect(filenameFromDisposition('attachment', 'fallback.csv')).toBe('fallback.csv');
     expect(filenameFromDisposition('', 'fallback.csv')).toBe('fallback.csv');
+  });
+
+  it('38b. a saved PDF is named by document number and student', () => {
+    expect(documentFileName('INV-000123', 'Aarav Sharma')).toBe('INV-000123 - Aarav Sharma.pdf');
+    expect(documentFileName('RCPT-000045', 'Aarav Sharma')).toBe('RCPT-000045 - Aarav Sharma.pdf');
+  });
+
+  it('38c. characters Windows forbids in a filename are replaced, never dropped', () => {
+    // Replaced rather than removed: two students whose names differ only in
+    // punctuation must not collapse onto the same filename.
+    expect(documentFileName('INV-000001', 'A/B')).toBe('INV-000001 - A-B.pdf');
+    expect(documentFileName('INV-000002', 'X: Y')).toBe('INV-000002 - X- Y.pdf');
+    expect(documentFileName('INV-000003', 'a*b?c"d<e>f|g\\h')).toBe(
+      'INV-000003 - a-b-c-d-e-f-g-h.pdf'
+    );
+  });
+
+  it('38d. a missing, blank or runaway student name still gives a usable filename', () => {
+    expect(documentFileName('INV-000004', null)).toBe('INV-000004.pdf');
+    expect(documentFileName('INV-000005', '   ')).toBe('INV-000005.pdf');
+    expect(documentFileName('INV-000006', 'Name.')).toBe('INV-000006 - Name.pdf');
+
+    const long = documentFileName('INV-000007', 'Q'.repeat(200));
+    expect(long.endsWith('.pdf')).toBe(true);
+    expect(long.length).toBeLessThanOrEqual(124);
+    expect(long.startsWith('INV-000007 - Q')).toBe(true);
   });
 });
 

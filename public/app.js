@@ -18,7 +18,7 @@ import {
 import {
   money, amountWithCurrency, cents, lineAmountCents, parseNumber, hasAtMost2dp,
   buildQuery, isoDate, fmtDate, todayIso, addDaysIso, fieldMessage,
-  inrOffByCents, INR_TOLERANCE_CENTS, PAYMENT_METHOD_LABELS,
+  inrOffByCents, INR_TOLERANCE_CENTS, PAYMENT_METHOD_LABELS, documentFileName,
 } from './lib.js';
 
 const PAGE_SIZE = 50;
@@ -270,6 +270,7 @@ function renderInvoices() {
     actions.appendChild(
       actionButton('View PDF', () => viewPdf('invoices', row.id, row.invoice_number))
     );
+    actions.appendChild(actionButton('Save PDF', () => savePdf('invoices', row)));
     if (!row.email_sent_at && row.status !== 'voided') {
       actions.appendChild(actionButton('Retry email', () => retryEmail('invoices', row)));
     }
@@ -393,6 +394,7 @@ function renderReceipts() {
     actions.appendChild(
       actionButton('View PDF', () => viewPdf('receipts', row.id, row.invoice_number))
     );
+    actions.appendChild(actionButton('Save PDF', () => savePdf('receipts', row)));
     if (!row.email_sent_at && row.status !== 'voided') {
       actions.appendChild(actionButton('Retry email', () => retryEmail('receipts', row)));
     }
@@ -426,6 +428,24 @@ async function viewPdf(kind, id, number) {
   } catch (err) {
     if (err.status === 404) {
       banner('warn', `The PDF for ${number} was never stored. "Retry email" rebuilds it.`);
+      return;
+    }
+    reportError(err);
+  }
+}
+
+// Saves the stored PDF to the downloads folder as "INV-000123 - Aarav
+// Sharma.pdf", ready to attach to an email by hand. The document itself is not
+// touched and nothing is sent — this is the manual alternative to the automatic
+// email, not a replacement for it.
+async function savePdf(kind, row) {
+  const filename = documentFileName(row.invoice_number, row.student_name);
+  try {
+    await api.savePdf(`/api/${kind}/${row.id}/pdf`, filename);
+    banner('ok', `Saved as ${filename} — attach it to your email.`);
+  } catch (err) {
+    if (err.status === 404) {
+      banner('warn', `The PDF for ${row.invoice_number} was never stored. "Retry email" rebuilds it.`);
       return;
     }
     reportError(err);
@@ -855,7 +875,12 @@ async function submitInvoice() {
           run: () => viewPdf('invoices', invoice.id, invoice.invoice_number),
         });
       } else {
-        banner('warn', `Invoice ${invoice.invoice_number} recorded, but the email failed — use Retry from the list.`);
+        banner(
+          'warn',
+          `Invoice ${invoice.invoice_number} is recorded, but the email did not go out. ` +
+            'Save the PDF and send it yourself, or use Retry email from the list.',
+          { label: 'Save PDF', run: () => savePdf('invoices', invoice) }
+        );
       }
       resetInvoiceForm();
       state.linkableLoaded = false;
@@ -1075,7 +1100,12 @@ async function submitReceipt() {
           run: () => viewPdf('receipts', receipt.id, receipt.invoice_number),
         });
       } else {
-        banner('warn', `Receipt ${receipt.invoice_number} recorded, but the email failed — use Retry from the list.`);
+        banner(
+          'warn',
+          `Receipt ${receipt.invoice_number} is recorded, but the email did not go out. ` +
+            'Save the PDF and send it yourself, or use Retry email from the list.',
+          { label: 'Save PDF', run: () => savePdf('receipts', receipt) }
+        );
       }
       state.linkableLoaded = false;
       resetReceiptForm();

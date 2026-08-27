@@ -200,14 +200,33 @@ export async function openPdf(path) {
   return win ? null : url;
 }
 
-export async function downloadCsv(path, fallbackName) {
-  const { blob, disposition } = await fetchBlob(path);
+// Hands the browser a blob to save under a chosen name. Shared by the CSV
+// exports and the saved PDFs so there is one place that knows the trick.
+function saveBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = filenameFromDisposition(disposition, fallbackName);
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+
+export async function downloadCsv(path, fallbackName) {
+  const { blob, disposition } = await fetchBlob(path);
+  saveBlob(blob, filenameFromDisposition(disposition, fallbackName));
+}
+
+// Saves a document's PDF to the owner's downloads folder, for attaching to an
+// email by hand. Same authenticated fetch as openPdf — only the destination
+// differs, a file rather than a tab.
+//
+// The name is decided by the caller rather than read from Content-Disposition:
+// it carries the student's name, which may contain characters no HTTP header
+// can hold cleanly, and the browser takes a plain string here without any of
+// that encoding.
+export async function savePdf(path, filename) {
+  const { blob } = await fetchBlob(path);
+  saveBlob(blob, filename);
 }
