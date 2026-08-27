@@ -26,6 +26,18 @@
 
 * { box-sizing: border-box; }
 
+/* The hidden attribute must always win.
+   Every screen transition in this tool is `node.hidden = true/false` — the
+   login screen giving way to the main one, the tab panels, the invoice/receipt
+   switch, the banner, the dialog. `hidden` does its job through the browser's
+   own `display: none`, and ANY author `display:` rule on the same element
+   beats it: an element carrying `.login-wrap { display: flex }` stays on
+   screen with `hidden` set, and the app looks frozen while it is in fact
+   working. That is not hypothetical — it hid a SUCCESSFUL login behind the
+   login screen. One rule here, rather than a `[hidden]` patch per component,
+   is the only version the next piece of layout cannot quietly defeat. */
+[hidden] { display: none !important; }
+
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -401,7 +413,6 @@ legend { font-size: 13px; font-weight: 700; color: var(--navy); padding: 0 6px; 
   z-index: 50;
 }
 
-.overlay[hidden] { display: none; }
 
 .dialog { width: 100%; max-width: 460px; max-height: 90vh; overflow-y: auto; }
 .dialog-title { font-size: 18px; margin-bottom: 12px; }

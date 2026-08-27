@@ -754,3 +754,85 @@ describe('end-to-end: the path the screens take', () => {
     expect((await api(base, '/api/invoices', { token: temp })).status).toBe(401);
   });
 });
+
+// ── 12. the hidden attribute actually hides ─────────────────────────────────
+//
+// Every screen change in this tool is `node.hidden = true/false`. `hidden`
+// works through the browser's own `display: none`, which ANY author `display:`
+// rule on the same element overrides — and then the element stays on screen
+// with `hidden` set. That is what hid a SUCCESSFUL login behind the login
+// screen: `.login-wrap { display: flex }` beat `[hidden]`, the main view was
+// pushed below the fold, and clicking "Log in" looked like nothing happening.
+//
+// Nothing else in this suite could catch it: these tests drive the API, not a
+// browser, and the DOM is never laid out. So the invariant is checked at the
+// only level available here — the stylesheet must carry ONE global guard, not
+// a `[hidden]` patch per component that the next piece of layout forgets.
+
+describe('the hidden attribute actually hides', () => {
+  const stripCss = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '');
+  const readPublic = (name) => fs.readFileSync(path.join(PUBLIC_DIR, name), 'utf8');
+
+  // Class selectors in styles.css that set `display` — the rules that can beat
+  // `[hidden]` when they land on an element the app toggles.
+  function classesThatSetDisplay(css) {
+    const found = new Set();
+    for (const block of stripCss(css).split('}')) {
+      const at = block.indexOf('{');
+      if (at === -1) continue;
+      const selector = block.slice(0, at);
+      const body = block.slice(at + 1);
+      if (!/(^|;|\s)display\s*:/.test(body)) continue;
+      if (/\[hidden\]/.test(selector)) continue; // that IS the guard
+      for (const m of selector.matchAll(/\.([A-Za-z0-9_-]+)/g)) found.add(m[1]);
+    }
+    return found;
+  }
+
+  // Elements the app shows and hides: those born `hidden` in the page, plus
+  // any id the scripts assign `.hidden` on.
+  function toggledElements(html, scripts) {
+    const out = [];
+    for (const tag of html.match(/<[a-z][^>]*>/gi) || []) {
+      const id = (/\sid="([^"]+)"/i.exec(tag) || [])[1];
+      const cls = (/\sclass="([^"]+)"/i.exec(tag) || [])[1] || '';
+      const bornHidden = /\shidden(\s|>|=)/i.test(tag);
+      // The scripts reach these through $('id'), so a literal search is enough
+      // and keeps the check readable.
+      const scripted =
+        !!id && (scripts.includes("'" + id + "').hidden") || scripts.includes('"' + id + '").hidden'));
+      if (bornHidden || scripted) {
+        out.push({ id: id || null, classes: cls.split(/\s+/).filter(Boolean) });
+      }
+    }
+    return out;
+  }
+
+  it('55. no element the app toggles is left visible by a display: rule', () => {
+    const css = readPublic('styles.css');
+    const display = classesThatSetDisplay(css);
+    const risky = toggledElements(indexHtml, readPublic('app.js') + readPublic('ui.js')).filter(
+      (e) => e.classes.some((c) => display.has(c))
+    );
+
+    // If this ever drops to zero the assertion below has stopped meaning
+    // anything — fail loudly rather than pass on an empty set.
+    expect(
+      risky.length,
+      'no toggled element carries a display: rule — has the page changed?'
+    ).toBeGreaterThan(0);
+
+    // …so the global guard is the only thing keeping every one of them correct.
+    expect(
+      stripCss(css),
+      'these elements need [hidden] to win: ' + risky.map((e) => e.id).join(', ')
+    ).toMatch(/\[hidden\]\s*\{[^}]*display\s*:\s*none\s*!important/);
+  });
+
+  it('56. the guard is global, not scoped to one component', () => {
+    const css = stripCss(readPublic('styles.css'));
+    expect(css, 'expected a bare [hidden] rule, not .something[hidden]').toMatch(
+      /(^|\})\s*\[hidden\]\s*\{[^}]*display\s*:\s*none\s*!important[^}]*\}/m
+    );
+  });
+});
