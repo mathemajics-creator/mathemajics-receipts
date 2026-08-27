@@ -20,8 +20,8 @@ const PUBLIC_COLUMNS = [
   'id', 'invoice_number', 'issue_date', 'due_date', 'student_name', 'parent_name',
   'parent_email', 'teacher_name', 'line_items', 'subtotal', 'discount_label',
   'discount_amount', 'total', 'currency', 'fx_rate', 'fx_source', 'fx_date',
-  'fx_mode', 'inr_amount', 'notes', 'status', 'void_reason', 'voided_at',
-  'email_sent_at', 'created_at',
+  'fx_mode', 'inr_amount', 'free_class_count', 'free_class_reasons', 'notes',
+  'status', 'void_reason', 'voided_at', 'email_sent_at', 'created_at',
 ];
 const PUBLIC_SELECT = PUBLIC_COLUMNS.map((c) => 'i.' + c).join(', ');
 
@@ -119,8 +119,8 @@ router.get('/export.csv', async (req, res, next) => {
       'invoice_number', 'issue_date', 'due_date', 'student_name', 'parent_name',
       'parent_email', 'teacher_name', 'line_items', 'subtotal', 'discount_label',
       'discount_amount', 'total', 'currency', 'fx_rate', 'fx_source', 'fx_date',
-      'fx_mode', 'inr_amount', 'status', 'void_reason', 'voided_at',
-      'email_sent_at', 'created_at',
+      'fx_mode', 'inr_amount', 'free_class_count', 'free_class_reasons',
+      'status', 'void_reason', 'voided_at', 'email_sent_at', 'created_at',
       // Reconciliation columns — what the accountant matches payments on.
       'paid', 'receipt_number', 'receipt_amount', 'receipt_date',
     ];
@@ -132,6 +132,7 @@ router.get('/export.csv', async (req, res, next) => {
           r.parent_name, r.parent_email, r.teacher_name, JSON.stringify(r.line_items),
           r.subtotal, r.discount_label, r.discount_amount, r.total, r.currency,
           r.fx_rate, r.fx_source, isoDate(r.fx_date), r.fx_mode, r.inr_amount,
+          r.free_class_count, r.free_class_reasons,
           r.status, r.void_reason,
           r.voided_at ? new Date(r.voided_at).toISOString() : null,
           r.email_sent_at ? new Date(r.email_sent_at).toISOString() : null,

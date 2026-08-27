@@ -11,6 +11,7 @@
 //      as-is; numbers are never quietly adjusted to make one go away.
 
 import * as api from './api.js';
+import { coursesFor, feeLine } from './fees.js';
 import {
   $, el, clear, banner, hideBanner, initBanner, initDialog, askConfirm,
   withBusy,
@@ -504,9 +505,11 @@ function lineInput(row, name) {
   return row.querySelector(`[data-li="${name}"]`);
 }
 
+// Returns the new row, or null when the twenty-item ceiling is already reached,
+// so quick add can tell the difference rather than silently doing nothing.
 function addLineItem() {
   const rows = lineRows();
-  if (rows.length >= 20) return;
+  if (rows.length >= 20) return null;
   const fragment = $('tpl-line-item').content.cloneNode(true);
   const row = fragment.firstElementChild;
   for (const name of ['description', 'qty', 'rate']) {
@@ -518,6 +521,60 @@ function addLineItem() {
     recalcInvoice();
   });
   $('iv-items').appendChild(row);
+  recalcInvoice();
+  return row;
+}
+
+// ── Quick add from the fee structure ────────────────────────────────────────
+//
+// A shortcut into the line items, never an authority over them: it writes the
+// published description, quantity and price into a row and stops there. All
+// three stay editable, because an invoice sometimes has to depart from the
+// price list. The server is not involved and never sees the fee table — it
+// still re-derives every total from whatever the line items end up saying.
+
+function renderCourseOptions() {
+  const currency = $('iv-currency').value;
+  const courses = coursesFor(currency);
+  const select = $('iv-qa-course');
+  const previous = select.value;
+
+  clear(select);
+  for (const course of courses) {
+    select.appendChild(el('option', { text: course.name, attrs: { value: course.name } }));
+  }
+
+  // No published table for this currency (INR) — hide the shortcut rather than
+  // offer an empty dropdown or invent a price.
+  $('iv-quickadd').hidden = courses.length === 0;
+  if (courses.some((c) => c.name === previous)) select.value = previous;
+  $('iv-qa-note').textContent = '';
+}
+
+function quickAdd() {
+  const line = feeLine($('iv-currency').value, $('iv-qa-course').value, $('iv-qa-package').value);
+  if (!line) return;
+
+  // Fill the first wholly untouched row — a fresh form has exactly one — so the
+  // common case does not leave an empty line behind. Anything part-filled is
+  // left alone; that is the owner's work in progress.
+  let row = lineRows().find((r) =>
+    ['description', 'qty', 'rate'].every((name) => lineInput(r, name).value.trim() === '')
+  );
+  if (!row) {
+    row = addLineItem();
+    if (!row) {
+      $('iv-qa-note').textContent = 'There is a limit of 20 items.';
+      return;
+    }
+  }
+
+  lineInput(row, 'description').value = line.description;
+  lineInput(row, 'qty').value = String(line.qty);
+  lineInput(row, 'rate').value = String(line.rate);
+  $('iv-qa-note').textContent =
+    `Added ${line.description} at ${amountWithCurrency($('iv-currency').value, line.rate)}. ` +
+    'Change anything you need to.';
   recalcInvoice();
 }
 
@@ -680,16 +737,51 @@ function resetInvoiceForm() {
   $('iv-fx-status').textContent = '';
   for (const id of ['iv-fx-rate', 'iv-fx-source', 'iv-fx-date', 'iv-inr-amount']) $(id).value = '';
   $('iv-fx-warn').hidden = true;
+  $('iv-free-on').checked = false;
+  $('iv-free').hidden = true;
+  $('iv-free-count').value = '';
+  for (const [id] of FREE_CLASS_REASONS) $(id).checked = false;
+  $('iv-free-note').textContent = '';
   state.inrTouched = false;
   state.fxCurrency = null;
   clear($('iv-items'));
   addLineItem();
+  renderCourseOptions();
   updateIndicativeLabel();
 }
 
 function updateIndicativeLabel() {
   $('iv-fx-indicative-label').textContent =
     `Just showing the equivalent — payment is in ${$('iv-currency').value}`;
+}
+
+// The three reasons, always in this order however they were ticked, so the note
+// on the document reads the same way every time. The server enforces the same
+// vocabulary and the same ordering — this is only what the form offers.
+const FREE_CLASS_REASONS = [
+  ['iv-free-referral', 'Referral'],
+  ['iv-free-sibling', 'Sibling'],
+  ['iv-free-group', 'Group'],
+];
+
+function selectedFreeClassReasons() {
+  return FREE_CLASS_REASONS.filter(([id]) => $(id).checked).map(([, name]) => name);
+}
+
+// A live plain-language echo of what will print on the invoice, so the wording
+// is never a surprise when the PDF arrives.
+function updateFreeClassNote() {
+  const count = parseNumber($('iv-free-count').value);
+  if (count === null || count < 1) {
+    $('iv-free-note').textContent = '';
+    return;
+  }
+  const reasons = selectedFreeClassReasons();
+  const noun = count === 1 ? 'free class' : 'free classes';
+  $('iv-free-note').textContent =
+    `The invoice will say: ${count} ${noun} earned on this invoice` +
+    (reasons.length > 0 ? ` (${reasons.join(' + ')})` : '') +
+    '. It does not change any amount.';
 }
 
 function selectedFxMode() {
@@ -834,6 +926,19 @@ function buildInvoiceBody() {
     }
   }
 
+  // Free classes earned. Nothing here touches a total — it is teaching time,
+  // not money — so it is checked after the figures and cannot disturb them.
+  if ($('iv-free-on').checked) {
+    const count = parseNumber($('iv-free-count').value);
+    if (count === null || !Number.isInteger(count) || count < 1 || count > 100) {
+      fail('err-iv-free_class_count', 'Enter how many free classes were earned (a whole number, 1 to 100).');
+    } else if (ok) {
+      body.free_class_count = count;
+      const reasons = selectedFreeClassReasons();
+      if (reasons.length > 0) body.free_class_reasons = reasons;
+    }
+  }
+
   if (!ok) {
     $('iv-form-error').textContent = 'Some details need fixing — see the messages above.';
     return null;
@@ -858,6 +963,15 @@ async function submitInvoice() {
         (body.fx_mode === 'payable'
           ? 'the parent is paying in rupees.'
           : `for reference only; payment is in ${body.currency}.`),
+    });
+  }
+  if (body.free_class_count !== undefined) {
+    const noun = body.free_class_count === 1 ? 'free class' : 'free classes';
+    lines.push({
+      text:
+        `Records ${body.free_class_count} ${noun}` +
+        (body.free_class_reasons ? ` (${body.free_class_reasons.join(' + ')})` : '') +
+        ' — this does not change the amount.',
     });
   }
   lines.push({ text: 'The invoice will be EMAILED to the parent immediately.', class: 'caution' });
@@ -1235,9 +1349,14 @@ function initInvoiceForm() {
   });
 
   $('iv-add-item').addEventListener('click', addLineItem);
+  $('iv-qa-add').addEventListener('click', quickAdd);
   $('iv-discount-amount').addEventListener('input', recalcInvoice);
   $('iv-discount-label').addEventListener('input', recalcInvoice);
   $('iv-currency').addEventListener('change', () => {
+    // The fee tables are per currency, so the course list follows it. Lines
+    // already added keep the prices they were added at — changing currency has
+    // never rewritten an existing line and must not start.
+    renderCourseOptions();
     updateIndicativeLabel();
     recalcInvoice();
     if (!$('iv-fx').hidden && state.fxCurrency !== $('iv-currency').value) fetchRate();
@@ -1260,6 +1379,20 @@ function initInvoiceForm() {
       $('iv-fx-warn').hidden = true;
     }
   });
+  $('iv-free-on').addEventListener('change', () => {
+    const on = $('iv-free-on').checked;
+    $('iv-free').hidden = !on;
+    if (!on) {
+      $('iv-free-count').value = '';
+      for (const [id] of FREE_CLASS_REASONS) $(id).checked = false;
+    }
+    updateFreeClassNote();
+  });
+  $('iv-free-count').addEventListener('input', updateFreeClassNote);
+  for (const [id] of FREE_CLASS_REASONS) {
+    $(id).addEventListener('change', updateFreeClassNote);
+  }
+
   $('iv-fx-rate').addEventListener('input', recalcInvoice);
   $('iv-inr-amount').addEventListener('input', () => {
     state.inrTouched = true;

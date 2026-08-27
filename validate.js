@@ -138,6 +138,7 @@ const INVOICE_ALLOWED = new Set([
   'teacher_name', 'line_items', 'discount_label', 'discount_amount',
   'subtotal', 'total', 'currency', 'notes',
   'fx_rate', 'fx_source', 'fx_date', 'fx_mode', 'inr_amount',
+  'free_class_count', 'free_class_reasons',
 ]);
 const INVOICE_REQUIRED_STRINGS = [
   ['student_name', 200],
@@ -147,6 +148,13 @@ const INVOICE_OPTIONAL_STRINGS = [
   ['teacher_name', 200],
   ['notes', 2000],
 ];
+// Free classes earned on this invoice. Teaching time owed, never money: no
+// total moves because of it. The reasons are a fixed vocabulary, joined in this
+// order however the client sends them, so the printed note reads the same way
+// every time and the column never fills with free text.
+const FREE_CLASS_REASONS = ['Referral', 'Sibling', 'Group'];
+const MAX_FREE_CLASSES = 100;
+
 const FX_MODES = new Set(['indicative', 'payable']);
 const FX_FIELDS = ['fx_rate', 'fx_source', 'fx_date', 'fx_mode', 'inr_amount'];
 const LINE_ITEM_KEYS = new Set(['description', 'qty', 'rate', 'amount']);
@@ -433,6 +441,50 @@ function validateInvoiceInput(body) {
         data.inr_amount = inr;
       }
     }
+  }
+
+  // ── Free classes earned (optional; never touches a total) ─────────────────
+  //
+  // The count is what makes the block present: a bonus note with no number
+  // would print as a promise with no content. The reasons are optional detail
+  // and are normalised into one canonical string here, so the document, the
+  // export and the database all read identically.
+  const rawReasons = body.free_class_reasons;
+  let reasons = null;
+  if (rawReasons !== undefined && rawReasons !== null) {
+    if (!Array.isArray(rawReasons) || rawReasons.some((r) => typeof r !== 'string')) {
+      errors.push({ field: 'free_class_reasons', error: 'invalid_free_class_reasons' });
+    } else {
+      const chosen = FREE_CLASS_REASONS.filter((name) => rawReasons.includes(name));
+      const unknown = rawReasons.filter((name) => !FREE_CLASS_REASONS.includes(name));
+      // Comparing against the raw length, not a de-duplicated set: a repeated
+      // reason is a client that has lost track of what it is sending, and the
+      // canonical string would silently swallow it.
+      if (unknown.length > 0 || chosen.length !== rawReasons.length) {
+        errors.push({ field: 'free_class_reasons', error: 'invalid_free_class_reasons' });
+      } else if (chosen.length > 0) {
+        reasons = chosen.join(' + ');
+      }
+    }
+  }
+
+  const freeCount = body.free_class_count;
+  if (freeCount === undefined || freeCount === null) {
+    data.free_class_count = null;
+    data.free_class_reasons = null;
+    if (reasons !== null) {
+      errors.push({ field: 'free_class_count', error: 'free_class_count_required' });
+    }
+  } else if (
+    typeof freeCount !== 'number' ||
+    !Number.isInteger(freeCount) ||
+    freeCount < 1 ||
+    freeCount > MAX_FREE_CLASSES
+  ) {
+    errors.push({ field: 'free_class_count', error: 'invalid_free_class_count' });
+  } else {
+    data.free_class_count = freeCount;
+    data.free_class_reasons = reasons;
   }
 
   return { errors, data };

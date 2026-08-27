@@ -246,6 +246,18 @@
 
       <fieldset class="items">
         <legend>Items</legend>
+        <div class="quickadd" id="iv-quickadd">
+          <span class="field-label">Quick add from the fee structure</span>
+          <div class="quickadd-row">
+            <select id="iv-qa-course" aria-label="Course"></select>
+            <select id="iv-qa-package" aria-label="Class package">
+              <option value="8">8 Classes</option>
+              <option value="16">16 Classes</option>
+            </select>
+            <button id="iv-qa-add" class="btn ghost" type="button">Add</button>
+          </div>
+          <span id="iv-qa-note" class="hint"></span>
+        </div>
         <div id="iv-items"></div>
         <p class="field-error" id="err-iv-line_items"></p>
         <div class="items-foot">
@@ -277,6 +289,28 @@
       </div>
       <p class="field-error" id="err-iv-subtotal"></p>
       <p class="field-error" id="err-iv-total"></p>
+
+      <fieldset class="freeclasses">
+        <legend>Free classes earned <span class="hint">(optional)</span></legend>
+        <label class="checkline">
+          <input id="iv-free-on" type="checkbox">
+          <span>Log free classes earned on this invoice</span>
+        </label>
+        <div id="iv-free" hidden>
+          <div class="checkrow">
+            <label class="checkline"><input id="iv-free-referral" type="checkbox"><span>Referral</span></label>
+            <label class="checkline"><input id="iv-free-sibling" type="checkbox"><span>Sibling</span></label>
+            <label class="checkline"><input id="iv-free-group" type="checkbox"><span>Group</span></label>
+          </div>
+          <label class="field narrow">
+            <span class="field-label">Number of free classes</span>
+            <input id="iv-free-count" type="number" min="1" step="1" max="100" inputmode="numeric">
+          </label>
+          <p id="iv-free-note" class="hint"></p>
+        </div>
+        <p class="field-error" id="err-iv-free_class_count"></p>
+        <p class="field-error" id="err-iv-free_class_reasons"></p>
+      </fieldset>
 
       <fieldset class="fx">
         <legend>Indian rupees</legend>

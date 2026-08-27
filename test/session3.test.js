@@ -68,6 +68,7 @@ import {
 } from '../public/lib.js';
 
 import { filenameFromDisposition } from '../public/api.js';
+import { FEES, coursesFor, feeLine } from '../public/fees.js';
 
 const REPO_ROOT = path.join(__dirname, '..');
 const PUBLIC_DIR = path.join(REPO_ROOT, 'public');
@@ -163,6 +164,7 @@ describe('static serving', () => {
       ['/lib.js', 'javascript'],
       ['/api.js', 'javascript'],
       ['/ui.js', 'javascript'],
+      ['/fees.js', 'javascript'],
     ];
     for (const [p, type] of expected) {
       const res = await fetch(base + p);
@@ -266,7 +268,7 @@ describe('the page obeys the CSP structurally', () => {
     // These files cannot simply be imported here (app.js drives the DOM on
     // load), so each is syntax-checked as ES module source instead. A typo in
     // any of them would otherwise only show up in a browser.
-    for (const name of ['app.js', 'api.js', 'ui.js', 'lib.js']) {
+    for (const name of ['app.js', 'api.js', 'ui.js', 'lib.js', 'fees.js']) {
       const tmp = path.join(os.tmpdir(), `receipts-syntax-${process.pid}-${name}`.replace(/\.js$/, '.mjs'));
       fs.writeFileSync(tmp, fs.readFileSync(path.join(PUBLIC_DIR, name)));
       try {
@@ -278,7 +280,7 @@ describe('the page obeys the CSP structurally', () => {
   });
 
   it('15. the frontend never builds markup out of data', () => {
-    for (const name of ['app.js', 'api.js', 'ui.js', 'lib.js']) {
+    for (const name of ['app.js', 'api.js', 'ui.js', 'lib.js', 'fees.js']) {
       const source = fs.readFileSync(path.join(PUBLIC_DIR, name), 'utf8');
       expect(source, name).not.toMatch(/\.innerHTML\s*=/);
       expect(source, name).not.toMatch(/insertAdjacentHTML/);
@@ -473,7 +475,7 @@ describe('error wording', () => {
         .replace(/<!--[\s\S]*?-->/g, ' ')
         .replace(/^\s*\/\/.*$/gm, ' ');
 
-    for (const name of ['app.js', 'api.js', 'ui.js', 'lib.js', 'styles.css', 'index.html']) {
+    for (const name of ['app.js', 'api.js', 'ui.js', 'lib.js', 'fees.js', 'styles.css', 'index.html']) {
       const source = stripComments(fs.readFileSync(path.join(PUBLIC_DIR, name), 'utf8'));
       expect(source, name).not.toMatch(/\bGST\b/i);
       expect(source, name).not.toMatch(/\btax\b/i);
@@ -516,6 +518,55 @@ describe('download filenames', () => {
     expect(long.endsWith('.pdf')).toBe(true);
     expect(long.length).toBeLessThanOrEqual(124);
     expect(long.startsWith('INV-000007 - Q')).toBe(true);
+  });
+});
+
+// ── the fee structure behind quick add ──────────────────────────────────────
+//
+// These prices are the published fee pages. A silent edit here would misprice
+// real invoices, so the four corners of both tables are pinned: a change has to
+// be deliberate enough to update a test.
+
+describe('fee structure', () => {
+  it('38e. the published AUD and USD prices are what quick add offers', () => {
+    expect(feeLine('AUD', 'Year 3–4', 16)).toEqual({
+      description: 'Year 3–4 — 16 Classes',
+      qty: 1,
+      rate: 256,
+    });
+    expect(feeLine('AUD', 'Year 7–8', 16).rate).toBe(304);
+    expect(feeLine('AUD', 'K–2', 8).rate).toBe(120);
+    expect(feeLine('AUD', 'Selective Exam Prep', 16).rate).toBe(352);
+    expect(feeLine('USD', 'K–3', 8).rate).toBe(112);
+    expect(feeLine('USD', 'SAT', 16).rate).toBe(320);
+    expect(feeLine('USD', 'Grade 10–11', 8).rate).toBe(160);
+  });
+
+  it('38f. every price is a positive whole-cent figure, both packages present', () => {
+    for (const [currency, courses] of Object.entries(FEES)) {
+      for (const course of courses) {
+        for (const classes of [8, 16]) {
+          const line = feeLine(currency, course.name, classes);
+          expect(line, `${currency} ${course.name} ${classes}`).not.toBeNull();
+          expect(line.rate, `${currency} ${course.name} ${classes}`).toBeGreaterThan(0);
+          expect(hasAtMost2dp(line.rate), `${currency} ${course.name} ${classes}`).toBe(true);
+          expect(line.qty).toBe(1);
+        }
+        // The 16-class block is always better value than two 8-class blocks.
+        expect(course.c16, `${currency} ${course.name}`).toBeLessThan(course.c8 * 2);
+      }
+    }
+  });
+
+  it('38g. INR has no published table, so quick add can offer nothing', () => {
+    expect(coursesFor('INR')).toEqual([]);
+    expect(feeLine('INR', 'Year 3–4', 16)).toBeNull();
+  });
+
+  it('38h. an unknown course or package is null, never a zero-rated line', () => {
+    expect(feeLine('AUD', 'Year 3–4', 12)).toBeNull();
+    expect(feeLine('AUD', 'No Such Course', 16)).toBeNull();
+    expect(feeLine('XXX', 'Year 3–4', 16)).toBeNull();
   });
 });
 

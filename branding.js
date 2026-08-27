@@ -24,6 +24,13 @@ const BAND_TEXT = '#FFFFFF';
 const PANEL_TINT = '#F1F5F9';
 const ROW_TINT = '#F8FAFC';
 
+// The free-classes note is the one thing on an invoice that is good news, so it
+// is the one place the document leaves the navy/cyan palette. Green rather than
+// cyan keeps it from being mistaken for the FX callout, which sits right above
+// it and is about money.
+const GREEN = '#2E9E5B';
+const GREEN_TINT = '#EAFAF0';
+
 // ── Identity ───────────────────────────────────────────────────────────────
 const BUSINESS_NAME = 'Mathemajics';
 const TAGLINE = 'Unlocking the Magic of Maths';
@@ -68,6 +75,8 @@ module.exports = {
   BAND_TEXT,
   PANEL_TINT,
   ROW_TINT,
+  GREEN,
+  GREEN_TINT,
   BUSINESS_NAME,
   TAGLINE,
   WEBSITE,

@@ -98,6 +98,15 @@ function qtyText(v) {
   return String(Number(v));
 }
 
+// "2 free classes earned (Sibling)" — the reasons are optional, and the noun
+// agrees with the number so a single free class does not read as a typo.
+function freeClassText(invoice) {
+  const n = Number(invoice.free_class_count);
+  const noun = n === 1 ? 'free class' : 'free classes';
+  const reasons = invoice.free_class_reasons ? ` (${invoice.free_class_reasons})` : '';
+  return `${n} ${noun} earned on this invoice${reasons}`;
+}
+
 // ── Shared drawing primitives ──────────────────────────────────────────────
 
 // Helvetica has no true small caps; uppercase at a small size with a little
@@ -388,6 +397,26 @@ function generateInvoicePdf(invoice) {
         fy += doc.heightOfString(indicative, { width: innerW }) + 4;
       }
       doc.text(rateLine, LEFT + pad, fy, { width: innerW });
+      y += boxH;
+    }
+
+    // ── Free classes earned ─────────────────────────────────────────────────
+    // Teaching time the family has earned, not money: it sits BELOW the total
+    // and changes nothing above it. Green rather than the document's cyan, so
+    // it cannot be misread as part of the amount payable.
+    if (invoice.free_class_count) {
+      const line = freeClassText(invoice);
+      const pad = 10;
+      const innerW = CONTENT_W - pad * 2;
+      doc.font('Helvetica-Bold').fontSize(10);
+      const boxH = pad + doc.heightOfString(line, { width: innerW }) + pad;
+
+      y += 14;
+      ensure(boxH);
+      doc.lineWidth(1);
+      doc.rect(LEFT, y, CONTENT_W, boxH).fillAndStroke(B.GREEN_TINT, B.GREEN);
+      doc.font('Helvetica-Bold').fontSize(10).fillColor(B.GREEN)
+        .text(line, LEFT + pad, y + pad, { width: innerW });
       y += boxH;
     }
 

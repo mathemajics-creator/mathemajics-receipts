@@ -382,6 +382,24 @@ legend { font-size: 13px; font-weight: 700; color: var(--navy); padding: 0 6px; 
 
 .items-foot { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 
+/* Quick add sits above the line items and is a shortcut into them, so it is
+   tinted rather than boxed — it must not read as a third kind of item row. */
+.quickadd {
+  background: var(--panel-tint);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+}
+.quickadd-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+.quickadd-row select { flex: 1 1 160px; min-width: 0; }
+.quickadd .hint { display: inline-block; margin-top: 6px; }
+
 .totals {
   border-top: 2px solid var(--navy);
   padding-top: 10px;
@@ -399,6 +417,10 @@ legend { font-size: 13px; font-weight: 700; color: var(--navy); padding: 0 6px; 
 
 .fx-body { margin-top: 10px; }
 .radios { margin-bottom: 10px; }
+
+/* Free classes: the three reasons read as one row of choices, not a stack. */
+.checkrow { display: flex; gap: 20px; flex-wrap: wrap; margin: 10px 0; }
+.field.narrow { max-width: 220px; }
 
 /* ── Dialog ─────────────────────────────────────────────────────────────── */
 

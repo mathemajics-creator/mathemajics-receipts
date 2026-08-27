@@ -114,7 +114,7 @@ const INVOICE_SERIES = {
     'issue_date', 'due_date', 'student_name', 'parent_name', 'parent_email',
     'teacher_name', 'line_items', 'subtotal', 'discount_label', 'discount_amount',
     'total', 'currency', 'fx_rate', 'fx_source', 'fx_date', 'fx_mode',
-    'inr_amount', 'notes',
+    'inr_amount', 'free_class_count', 'free_class_reasons', 'notes',
   ],
 };
 
